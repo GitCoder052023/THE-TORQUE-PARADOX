@@ -118,12 +118,9 @@ function renderInterface() {
     console.log(`Time Left: ${timeLeft < 60 ? C.red : C.green}${timeLeft}s${C.reset} | Score Multiplier: x${state.level}`);
     console.log(`Energy:    ${getProgressBar(state.energy, 100, 20, state.energy < 30 ? C.red : C.green)}`);
     console.log("");
-
-    // Bottle Art
-    const tightnessVisual = bottle.currentTightness > 0 ? `${C.red}(JAMMED +${bottle.currentTightness})${C.reset}` : `${C.green}(NEUTRAL)${C.reset}`;
     
     console.log(`       ${C.yellow}_____${C.reset}`);
-    console.log(`      ${C.yellow}[:::::]${C.reset}  <-- THE CAP ${tightnessVisual}`);
+    console.log(`      ${C.yellow}[:::::]${C.reset}  <-- THE CAP`);
     console.log(`      ${C.white}|     |${C.reset}`);
     console.log(`      ${C.white}|     |${C.reset}  Status: ${bottle.isOpen ? C.green + "OPEN" + C.reset : C.red + "LOCKED" + C.reset}`);
     console.log(`      ${C.white}|_____|${C.reset}`);
@@ -172,8 +169,7 @@ async function processMove(input) {
     // LOGIC: If we rotate in the LOCKED direction (Bad)
     if (attemptDir === bottle.lockedDir) {
         bottle.currentTightness += force;
-        state.history.push(`${C.red}Applied ${force}N ${attemptDir}... It feels stuck.${C.reset}`);
-        state.message = "Mistake! The cap didn't budge and feels tighter now.";
+        state.history.push(`${C.green}Applied ${force}N.${C.reset}`);
     } 
     // LOGIC: If we rotate in the OPEN direction (Good)
     else {
@@ -187,21 +183,16 @@ async function processMove(input) {
                 if (remainingForce >= bottle.requiredForce) {
                     bottle.isOpen = true;
                     state.message = "SUCCESS! The jamming cleared and the cap flew off!";
-                } else {
-                    state.message = "You cleared the jam, but need more force to open it.";
                 }
             } else {
                 // Force reduced the jam, but didn't clear it
                 bottle.currentTightness -= force;
-                state.message = `The cap is loosening... Jam reduced by ${force}.`;
             }
         } else {
             // No jam, pure opening attempt
             if (force >= bottle.requiredForce) {
                 bottle.isOpen = true;
                 state.message = "POP! The bottle opens smoothly.";
-            } else {
-                state.message = "Correct direction, but force was too weak.";
             }
         }
         state.history.push(`${C.green}Applied ${force}N ${attemptDir}...${C.reset}`);
@@ -230,7 +221,7 @@ async function runGame() {
         if (!bottle.isOpen && bottle.requiredForce === 0) {
             generateBottle(state.level);
             state.energy = Math.min(100, state.energy + 20);
-            state.message = `Level ${state.level} Started. Unknown config. Good luck.`;
+            state.message = `Level ${state.level} Started. Good luck.`;
         }
 
         // Force an immediate render before asking for input
