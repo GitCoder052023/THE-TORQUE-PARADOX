@@ -22,6 +22,7 @@ const C = {
     cyan: "\x1b[36m",
     white: "\x1b[37m",
     bgRed: "\x1b[41m",
+    bgGreen: "\x1b[42m",
 };
 
 // --- STATE MANAGEMENT ---
@@ -62,18 +63,81 @@ function clearScreen() {
     process.stdout.write('\x1b[H\x1b[J');
 }
 
+/**
+ * Load high scores from JSON file
+ * Returns array of score objects sorted by time (ascending, fastest first)
+ */
 function loadHighScores() {
     if (!fs.existsSync(SCORE_FILE)) return [];
     try {
-        return JSON.parse(fs.readFileSync(SCORE_FILE, 'utf8'));
-    } catch (e) { return []; }
+        const data = JSON.parse(fs.readFileSync(SCORE_FILE, 'utf8'));
+        return Array.isArray(data) ? data : [];
+    } catch (e) {
+        console.error("Error reading high scores:", e.message);
+        return [];
+    }
 }
 
-function saveHighScore(score) {
+/**
+ * Save a new high score
+ * Time-based scoring: Lesser time = Higher score
+ * Score calculation: (MAX_TIME_SECONDS - timeUsed) * 100 + bonus points
+ */
+function saveHighScore(timeUsed, energyRemaining, playerName = "Player") {
     const scores = loadHighScores();
-    scores.push({ date: new Date().toISOString().split('T')[0], score: score, time: getTimeElapsed() });
-    scores.sort((a, b) => b.score - a.score); // Descending
-    fs.writeFileSync(SCORE_FILE, JSON.stringify(scores.slice(0, 5), null, 2)); // Keep top 5
+    
+    // Score Calculation:
+    // Primary: Time-based (faster = higher)
+    // Bonus: Energy remaining adds bonus points
+    const timeScore = (MAX_TIME_SECONDS - timeUsed) * 100;
+    const energyBonus = Math.floor(energyRemaining * 10); // Max +1000 points
+    const totalScore = timeScore + energyBonus;
+
+    const newScore = {
+        rank: scores.length + 1,
+        playerName: playerName,
+        score: totalScore,
+        timeUsed: timeUsed,
+        energyRemaining: Math.floor(energyRemaining),
+        date: new Date().toISOString().split('T')[0],
+        timestamp: new Date().toISOString(),
+        timeScore: timeScore,
+        energyBonus: energyBonus
+    };
+
+    scores.push(newScore);
+    
+    // Sort by score (descending) - fastest times get highest scores
+    scores.sort((a, b) => b.score - a.score);
+    
+    // Update ranks
+    scores.forEach((score, index) => {
+        score.rank = index + 1;
+    });
+
+    // Keep top 10
+    const topScores = scores.slice(0, 10);
+    fs.writeFileSync(SCORE_FILE, JSON.stringify(topScores, null, 2));
+    
+    return newScore;
+}
+
+/**
+ * Get rank/position of a score in all-time high scores
+ */
+function getScoreRank(score) {
+    const scores = loadHighScores();
+    const rank = scores.findIndex(s => s.score === score);
+    return rank !== -1 ? rank + 1 : null;
+}
+
+/**
+ * Check if a score qualifies for all-time high scores
+ */
+function isHighScore(score) {
+    const scores = loadHighScores();
+    if (scores.length < 10) return true;
+    return score > scores[scores.length - 1].score;
 }
 
 function getProgressBar(current, max, width = 20, color = C.green) {
@@ -104,6 +168,15 @@ function getTimeElapsed() {
     return Math.floor((Date.now() - state.startTime) / 1000);
 }
 
+/**
+ * Format time in MM:SS format
+ */
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
 function renderInterface() {
     clearScreen();
     const timeUsed = getTimeElapsed();
@@ -115,7 +188,8 @@ function renderInterface() {
     console.log(`${C.cyan}=================================================${C.reset}`);
     
     // Stats
-    console.log(`Time Left: ${timeLeft < 60 ? C.red : C.green}${timeLeft}s${C.reset} | Score Multiplier: x${state.level}`);
+    const timeColor = timeLeft < 60 ? C.red : (timeLeft < 120 ? C.yellow : C.green);
+    console.log(`Time: ${timeColor}${formatTime(timeUsed)}${C.reset} / ${formatTime(MAX_TIME_SECONDS)} | Score Multiplier: x${state.level}`);
     console.log(`Energy:    ${getProgressBar(state.energy, 100, 20, state.energy < 30 ? C.red : C.green)}`);
     console.log("");
     
@@ -151,7 +225,15 @@ async function showIntroAndRules() {
 
     console.log(`${C.bright}THE OBJECTIVE:${C.reset}`);
     console.log(`Open all ${TOTAL_LEVELS} bottles within ${MAX_TIME_SECONDS} seconds using strategic force.`);
-    console.log(`Higher score = faster times + remaining energy.\n`);
+    console.log(`${C.bright}FASTEST COMPLETION TIME WINS!${C.reset}\n`);
+
+    console.log(`${C.bright}SCORING SYSTEM:${C.reset}`);
+    console.log(`• Your score is based on how FAST you complete the game`);
+    console.log(`• Formula: (${MAX_TIME_SECONDS}s - Your Time) × 100 + Energy Bonus`);
+    console.log(`• Energy Bonus: Remaining Energy × 10`);
+    console.log(`• Example: Complete in 120s with 50 energy = (300-120)×100 + 50×10 = 18,500`);
+    console.log(`• Fastest times get the highest scores!`);
+    console.log(`• Top 10 all-time fastest completions saved to leaderboard.\n`);
 
     console.log(`${C.bright}HOW BOTTLES WORK:${C.reset}`);
     console.log(`• Each bottle has a CAP that's locked in one direction: CW or ACW`);
@@ -187,14 +269,50 @@ async function showIntroAndRules() {
     console.log(`• Watch the LOG messages—they tell you what's happening`);
     console.log(`• If a bottle gets jammed, you'll need extra force to clear it`);
     console.log(`• Start with moderate force; increase gradually if resistance rises`);
-    console.log(`• Time is precious—don't waste energy on wrong directions`);
+    console.log(`• Time is precious—be efficient with your moves`);
     console.log(`• Sometimes a single powerful move beats multiple weak ones\n`);
 
     console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
-    console.log(`${C.bright}${C.green}Ready to open the bottles? Press ENTER to begin...${C.reset}`);
+    console.log(`${C.bright}${C.green}Ready to compete for the all-time high score? Press ENTER to begin...${C.reset}`);
     console.log(`${C.cyan}${'='.repeat(60)}${C.reset}\n`);
 
     await ask("");
+}
+
+/**
+ * Display all-time high scores leaderboard
+ */
+function displayHighScores() {
+    clearScreen();
+    const scores = loadHighScores();
+
+    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}`);
+    console.log(`${C.bright}${C.yellow}      ALL-TIME LEADERBOARD - TOP 10 FASTEST TIMES${C.reset}`);
+    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
+
+    if (scores.length === 0) {
+        console.log(`${C.yellow}No high scores yet. Be the first to complete the paradox!${C.reset}\n`);
+    } else {
+        console.log(`${C.bright}Rank | Score    | Player      | Time     | Energy | Date${C.reset}`);
+        console.log(`${C.cyan}${'-'.repeat(70)}${C.reset}`);
+        
+        scores.forEach((score, index) => {
+            const medal = index === 0 ? '🏆' : index === 1 ? '🥈' : index === 2 ? '🥉' : '  ';
+            const timeStr = formatTime(score.timeUsed);
+            const energyStr = `${score.energyRemaining}%`;
+            const rankStr = `${medal} ${score.rank}`.padEnd(6);
+            const scoreStr = score.score.toString().padEnd(9);
+            const nameStr = score.playerName.padEnd(12);
+            const timeDisplay = timeStr.padEnd(9);
+            const energyDisplay = energyStr.padEnd(7);
+            
+            console.log(`${rankStr}| ${scoreStr}| ${nameStr}| ${timeDisplay}| ${energyDisplay}| ${score.date}`);
+        });
+    }
+
+    console.log(`\n${C.cyan}${'='.repeat(70)}${C.reset}`);
+    console.log(`${C.yellow}Score Formula: (${MAX_TIME_SECONDS}s - Time Used) × 100 + (Energy Remaining × 10)${C.reset}`);
+    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
 }
 
 // --- CORE GAME LOGIC ---
@@ -210,7 +328,7 @@ async function processMove(input) {
         return;
     }
 
-    // 1. Check Energy Cost (Force = Energy Loss)
+    // 1. Check Energy Cost (Force ÷ 2 = Energy Loss)
     const energyCost = Math.ceil(force / 2); // 50 force = 25 energy lost
     if (state.energy < energyCost) {
         state.isGameOver = true;
@@ -232,7 +350,7 @@ async function processMove(input) {
     // LOGIC: If we rotate in the LOCKED direction (Bad)
     if (attemptDir === bottle.lockedDir) {
         bottle.currentTightness += force;
-        state.history.push(`${C.green}Applied ${force}N.${C.reset}`);
+        state.history.push(`${C.red}Applied ${force}N wrong direction. Bottle tightened!${C.reset}`);
     } 
     // LOGIC: If we rotate in the OPEN direction (Good)
     else {
@@ -250,6 +368,8 @@ async function processMove(input) {
             } else {
                 // Force reduced the jam, but didn't clear it
                 bottle.currentTightness -= force;
+                state.history.push(`${C.yellow}Applied ${force}N. Jam reduced but not cleared.${C.reset}`);
+                return;
             }
         } else {
             // No jam, pure opening attempt
@@ -258,7 +378,7 @@ async function processMove(input) {
                 state.message = "POP! The bottle opens smoothly.";
             }
         }
-        state.history.push(`${C.green}Applied ${force}N ${attemptDir}...${C.reset}`);
+        state.history.push(`${C.green}Applied ${force}N ${attemptDir}. Progress made!${C.reset}`);
     }
 }
 
@@ -324,24 +444,60 @@ async function runGame() {
 
     // --- GAME OVER SEQUENCE ---
     clearScreen();
+    
+    const timeUsed = getTimeElapsed();
+    const energyRemaining = state.energy;
+    
     if (state.level > TOTAL_LEVELS) {
-        const timeLeft = MAX_TIME_SECONDS - getTimeElapsed();
-        const totalScore = (timeLeft * 10) + state.energy;
-        console.log(`${C.green}CONGRATULATIONS! YOU OPENED ALL BOTTLES!${C.reset}`);
-        console.log(`Final Score: ${totalScore}`);
-        saveHighScore(totalScore);
+        // SUCCESS!
+        const timeScore = (MAX_TIME_SECONDS - timeUsed) * 100;
+        const energyBonus = Math.floor(energyRemaining * 10);
+        const totalScore = timeScore + energyBonus;
+        
+        console.log(`${C.bgGreen}${C.black}  🎉 CONGRATULATIONS! YOU OPENED ALL BOTTLES! 🎉  ${C.reset}\n`);
+        console.log(`${C.bright}${C.cyan}═══════════════════════════════════════════════${C.reset}`);
+        console.log(`${C.bright}FINAL STATISTICS:${C.reset}`);
+        console.log(`${C.cyan}───────────────────────────────────────────────${C.reset}`);
+        console.log(`Time Used:       ${C.yellow}${formatTime(timeUsed)}${C.reset} / ${formatTime(MAX_TIME_SECONDS)}`);
+        console.log(`Time Saved:      ${C.green}${formatTime(MAX_TIME_SECONDS - timeUsed)}${C.reset}`);
+        console.log(`Energy Remaining: ${C.green}${Math.floor(energyRemaining)}%${C.reset}`);
+        console.log(`Time Score:      ${C.bright}${timeScore}${C.reset} points`);
+        console.log(`Energy Bonus:    ${C.bright}${energyBonus}${C.reset} points`);
+        console.log(`${C.bright}TOTAL SCORE:     ${C.green}${totalScore}${C.reset} points${C.reset}`);
+        console.log(`${C.cyan}───────────────────────────────────────────────${C.reset}\n`);
+        
+        // Check if it's a new high score
+        if (isHighScore(totalScore)) {
+            console.log(`${C.bright}${C.yellow}🌟 NEW HIGH SCORE ACHIEVED! 🌟${C.reset}\n`);
+            
+            // Ask for player name
+            const playerName = await ask("Enter your name for the leaderboard: ");
+            const cleanName = playerName.trim() || "Anonymous";
+            
+            const newScore = saveHighScore(timeUsed, energyRemaining, cleanName);
+            console.log(`\n${C.green}✓ Score saved to leaderboard at rank #${newScore.rank}!${C.reset}\n`);
+        } else {
+            // Still a good score, save it
+            saveHighScore(timeUsed, energyRemaining, "Player");
+            const scores = loadHighScores();
+            const rank = getScoreRank(totalScore);
+            if (rank) {
+                console.log(`${C.yellow}Good score! You ranked #${rank} on the all-time leaderboard.${C.reset}\n`);
+            }
+        }
     } else {
-        console.log(`${C.red}GAME OVER${C.reset}`);
-        console.log(`Reason: ${state.message}`);
-        console.log(`You reached Level ${state.level}`);
+        // FAILURE
+        console.log(`${C.bgRed}${C.white}  GAME OVER - MISSION FAILED  ${C.reset}\n`);
+        console.log(`${C.red}Reason: ${state.message}${C.reset}`);
+        console.log(`You reached Level ${state.level} in ${formatTime(timeUsed)}`);
     }
 
-    console.log(`\n${C.yellow}--- HIGH SCORES ---${C.reset}`);
-    const scores = loadHighScores();
-    scores.forEach((s, i) => console.log(`${i+1}. Score: ${s.score} | Time: ${s.time}s | Date: ${s.date}`));
+    // Display all-time high scores
+    displayHighScores();
     
-    console.log("\nPress any key to exit...");
+    console.log("Press any key to exit...");
     await new Promise(resolve => rl.once('line', resolve));
+    rl.close();
     process.exit(0);
 }
 
