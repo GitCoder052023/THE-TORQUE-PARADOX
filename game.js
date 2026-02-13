@@ -1,9 +1,3 @@
-/**
- * THE TORQUE PARADOX
- * A CLI Puzzle Game based on Risk, Force, and Blind Optimization.
- * * Run with: node game.js
- */
-
 import fs from 'fs';
 import readline from 'readline';
 import path from 'path';
