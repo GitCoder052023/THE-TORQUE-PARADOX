@@ -134,6 +134,69 @@ function renderInterface() {
     console.log("Commands: 'cw <force>', 'acw <force>' (e.g., 'cw 25')");
 }
 
+// --- INTRO & RULES ---
+
+async function showIntroAndRules() {
+    clearScreen();
+    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
+    console.log(`${C.bright}${C.yellow}        WELCOME TO THE TORQUE PARADOX${C.reset}`);
+    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}\n`);
+
+    console.log(`${C.bright}THE STORY:${C.reset}`);
+    console.log(`You are trapped in a mysterious facility. Before you sit 10 sealed`);
+    console.log(`bottles, each one a puzzle. Your only way out is to open them all`);
+    console.log(`before your energy runs out and time expires. But beware—each bottle`);
+    console.log(`has its own twisted physics, and one wrong move could shatter`);
+    console.log(`everything.\n`);
+
+    console.log(`${C.bright}THE OBJECTIVE:${C.reset}`);
+    console.log(`Open all ${TOTAL_LEVELS} bottles within ${MAX_TIME_SECONDS} seconds using strategic force.`);
+    console.log(`Higher score = faster times + remaining energy.\n`);
+
+    console.log(`${C.bright}HOW BOTTLES WORK:${C.reset}`);
+    console.log(`• Each bottle has a CAP that's locked in one direction: CW or ACW`);
+    console.log(`• Your goal: twist it in the OPPOSITE direction to open it`);
+    console.log(`• If you twist the WRONG way, you TIGHTEN the cap (bad!)`);
+    console.log(`• Applying force in the RIGHT direction clears the jam and opens it\n`);
+
+    console.log(`${C.bright}ENERGY & FORCE:${C.reset}`);
+    console.log(`• You start each level with 100% energy`);
+    console.log(`• Every action costs energy: Force ÷ 2 = Energy lost`);
+    console.log(`  Example: Applying 50N costs 25 energy`);
+    console.log(`• If energy hits 0%, you collapse before opening the bottle → GAME OVER`);
+    console.log(`• Completing a level restores +20 energy (max 100%)\n`);
+
+    console.log(`${C.bright}THE CATCH (BREAKAGE):${C.reset}`);
+    console.log(`• Each bottle has a breaking point (max capacity)`);
+    console.log(`• Apply TOO MUCH force and it shatters → GAME OVER`);
+    console.log(`• Early levels are forgiving, but later levels are TIGHT`);
+    console.log(`• You must balance power with precision\n`);
+
+    console.log(`${C.bright}DIFFICULTY PROGRESSION:${C.reset}`);
+    console.log(`• Level 1-3: Easier. More safety margin before breakage`);
+    console.log(`• Level 4-7: Moderate. The danger increases`);
+    console.log(`• Level 8-10: BRUTAL. Breakage capacity nearly equals force needed`);
+    console.log(`• You MUST be precise or the bottle shatters\n`);
+
+    console.log(`${C.bright}COMMANDS:${C.reset}`);
+    console.log(`• 'cw <force>'   - Twist clockwise with N newtons of force`);
+    console.log(`• 'acw <force>'  - Twist counter-clockwise with N newtons of force`);
+    console.log(`  Example: 'cw 25' or 'acw 30'\n`);
+
+    console.log(`${C.bright}STRATEGY TIPS:${C.reset}`);
+    console.log(`• Watch the LOG messages—they tell you what's happening`);
+    console.log(`• If a bottle gets jammed, you'll need extra force to clear it`);
+    console.log(`• Start with moderate force; increase gradually if resistance rises`);
+    console.log(`• Time is precious—don't waste energy on wrong directions`);
+    console.log(`• Sometimes a single powerful move beats multiple weak ones\n`);
+
+    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
+    console.log(`${C.bright}${C.green}Ready to open the bottles? Press ENTER to begin...${C.reset}`);
+    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}\n`);
+
+    await ask("");
+}
+
 // --- CORE GAME LOGIC ---
 
 async function processMove(input) {
@@ -200,6 +263,8 @@ async function processMove(input) {
 }
 
 async function runGame() {
+    await showIntroAndRules();
+    
     clearScreen();
     console.log(C.yellow + "Initializing The Torque Paradox..." + C.reset);
     await sleep(1500);
@@ -258,7 +323,6 @@ async function runGame() {
     clearInterval(UI_TICKER);
 
     // --- GAME OVER SEQUENCE ---
-    // (Keep your existing Game Over code down here...)
     clearScreen();
     if (state.level > TOTAL_LEVELS) {
         const timeLeft = MAX_TIME_SECONDS - getTimeElapsed();
