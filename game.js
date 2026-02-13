@@ -59,7 +59,7 @@ function sleep(ms) {
 }
 
 function clearScreen() {
-    process.stdout.write('\x1b[2J\x1b[0f');
+    process.stdout.write('\x1b[H\x1b[J');
 }
 
 function loadHighScores() {
