@@ -9,7 +9,8 @@ const __dirname = path.dirname(__filename);
 // --- CONFIGURATION & CONSTANTS ---
 const TOTAL_LEVELS = 10;
 const MAX_TIME_SECONDS = 300; // 5 Minutes total
-const SCORE_FILE = path.join(__dirname, 'highscores.json');
+const SCORE_FILE = path.join(__dirname, 'personalscores.json');
+const DEFAULT_PLAYER_ID = 'player_default'; // Default player ID without requiring name input
 
 // ANSI Colors for Visuals (No external libraries needed)
 const C = {
@@ -29,11 +30,12 @@ const C = {
 const state = {
     level: 1,
     energy: 100, // Percentage
-    startTime: Date.now(),
+    startTime: 0, // Will be set when actual game starts, not in intro
     endTime: 0,
     isGameOver: false,
     message: "Welcome to the paradox. Choose wisely.",
-    history: [] // To show last few moves
+    history: [], // To show last few moves
+    playerId: DEFAULT_PLAYER_ID // Current player's ID 
 };
 
 // Bottle Physics (Hidden from player mostly)
@@ -64,27 +66,37 @@ function clearScreen() {
 }
 
 /**
- * Load high scores from JSON file
- * Returns array of score objects sorted by time (ascending, fastest first)
+ * Load player's personal best scores from JSON file
+ * Returns object mapping playerId to their best score object
+ * Initializes empty file if not present
  */
-function loadHighScores() {
-    if (!fs.existsSync(SCORE_FILE)) return [];
+function loadPersonalBests() {
+    if (!fs.existsSync(SCORE_FILE)) {
+        // Initialize with empty object if file doesn't exist
+        try {
+            fs.writeFileSync(SCORE_FILE, JSON.stringify({}, null, 2));
+            return {};
+        } catch (e) {
+            console.error("Error creating scores file:", e.message);
+            return {};
+        }
+    }
     try {
         const data = JSON.parse(fs.readFileSync(SCORE_FILE, 'utf8'));
-        return Array.isArray(data) ? data : [];
+        return typeof data === 'object' && !Array.isArray(data) ? data : {};
     } catch (e) {
-        console.error("Error reading high scores:", e.message);
-        return [];
+        console.error("Error reading scores:", e.message);
+        return {};
     }
 }
 
 /**
- * Save a new high score
+ * Save or update a player's personal best score
  * Time-based scoring: Lesser time = Higher score
  * Score calculation: (MAX_TIME_SECONDS - timeUsed) * 100 + bonus points
  */
-function saveHighScore(timeUsed, energyRemaining, playerName = "Player") {
-    const scores = loadHighScores();
+function savePersonalBest(playerId, timeUsed, energyRemaining) {
+    const personalBests = loadPersonalBests();
     
     // Score Calculation:
     // Primary: Time-based (faster = higher)
@@ -94,8 +106,7 @@ function saveHighScore(timeUsed, energyRemaining, playerName = "Player") {
     const totalScore = timeScore + energyBonus;
 
     const newScore = {
-        rank: scores.length + 1,
-        playerName: playerName,
+        playerId: playerId,
         score: totalScore,
         timeUsed: timeUsed,
         energyRemaining: Math.floor(energyRemaining),
@@ -105,39 +116,34 @@ function saveHighScore(timeUsed, energyRemaining, playerName = "Player") {
         energyBonus: energyBonus
     };
 
-    scores.push(newScore);
+    // Check if this is better than their previous best
+    const previousBest = personalBests[playerId];
+    let isNewPB = true;
     
-    // Sort by score (descending) - fastest times get highest scores
-    scores.sort((a, b) => b.score - a.score);
-    
-    // Update ranks
-    scores.forEach((score, index) => {
-        score.rank = index + 1;
-    });
+    if (previousBest && previousBest.score >= totalScore) {
+        isNewPB = false;
+        console.log(`\n${C.yellow}Personal best not beaten. Your record: ${previousBest.score} points${C.reset}`);
+        return { newScore, isNewPB, improvement: 0 };
+    }
 
-    // Keep top 10
-    const topScores = scores.slice(0, 10);
-    fs.writeFileSync(SCORE_FILE, JSON.stringify(topScores, null, 2));
+    const improvement = previousBest ? totalScore - previousBest.score : 0;
+    personalBests[playerId] = newScore;
     
-    return newScore;
+    try {
+        fs.writeFileSync(SCORE_FILE, JSON.stringify(personalBests, null, 2));
+        return { newScore, isNewPB, improvement };
+    } catch (e) {
+        console.error("Error saving score:", e.message);
+        return { newScore, isNewPB, improvement };
+    }
 }
 
 /**
- * Get rank/position of a score in all-time high scores
+ * Get a player's personal best score
  */
-function getScoreRank(score) {
-    const scores = loadHighScores();
-    const rank = scores.findIndex(s => s.score === score);
-    return rank !== -1 ? rank + 1 : null;
-}
-
-/**
- * Check if a score qualifies for all-time high scores
- */
-function isHighScore(score) {
-    const scores = loadHighScores();
-    if (scores.length < 10) return true;
-    return score > scores[scores.length - 1].score;
+function getPersonalBest(playerId) {
+    const personalBests = loadPersonalBests();
+    return personalBests[playerId] || null;
 }
 
 function getProgressBar(current, max, width = 20, color = C.green) {
@@ -165,6 +171,7 @@ function generateBottle(level) {
 }
 
 function getTimeElapsed() {
+    if (state.startTime === 0) return 0; // Timer hasn't started yet
     return Math.floor((Date.now() - state.startTime) / 1000);
 }
 
@@ -187,9 +194,9 @@ function renderInterface() {
     console.log(`${C.bright}           THE TORQUE PARADOX - LEVEL ${state.level}/${TOTAL_LEVELS}${C.reset}`);
     console.log(`${C.cyan}=================================================${C.reset}`);
     
-    // Stats
+    // Stats without player name
     const timeColor = timeLeft < 60 ? C.red : (timeLeft < 120 ? C.yellow : C.green);
-    console.log(`Time: ${timeColor}${formatTime(timeUsed)}${C.reset} / ${formatTime(MAX_TIME_SECONDS)} | Score Multiplier: x${state.level}`);
+    console.log(`Time: ${timeColor}${formatTime(timeUsed)}${C.reset} / ${formatTime(MAX_TIME_SECONDS)}`);
     console.log(`Energy:    ${getProgressBar(state.energy, 100, 20, state.energy < 30 ? C.red : C.green)}`);
     console.log("");
     
@@ -225,7 +232,7 @@ async function showIntroAndRules() {
 
     console.log(`${C.bright}THE OBJECTIVE:${C.reset}`);
     console.log(`Open all ${TOTAL_LEVELS} bottles within ${MAX_TIME_SECONDS} seconds using strategic force.`);
-    console.log(`${C.bright}FASTEST COMPLETION TIME WINS!${C.reset}\n`);
+    console.log(`${C.bright}BEAT YOUR PERSONAL BEST!${C.reset}\n`);
 
     console.log(`${C.bright}SCORING SYSTEM:${C.reset}`);
     console.log(`• Your score is based on how FAST you complete the game`);
@@ -233,7 +240,7 @@ async function showIntroAndRules() {
     console.log(`• Energy Bonus: Remaining Energy × 10`);
     console.log(`• Example: Complete in 120s with 50 energy = (300-120)×100 + 50×10 = 18,500`);
     console.log(`• Fastest times get the highest scores!`);
-    console.log(`• Top 10 all-time fastest completions saved to leaderboard.\n`);
+    console.log(`• Your personal best score will be saved and tracked.\n`);
 
     console.log(`${C.bright}HOW BOTTLES WORK:${C.reset}`);
     console.log(`• Each bottle has a CAP that's locked in one direction: CW or ACW`);
@@ -273,45 +280,38 @@ async function showIntroAndRules() {
     console.log(`• Sometimes a single powerful move beats multiple weak ones\n`);
 
     console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
-    console.log(`${C.bright}${C.green}Ready to compete for the all-time high score? Press ENTER to begin...${C.reset}`);
+    console.log(`${C.bright}${C.green}Ready to beat your personal best? Press ENTER to begin...${C.reset}`);
     console.log(`${C.cyan}${'='.repeat(60)}${C.reset}\n`);
 
     await ask("");
 }
 
 /**
- * Display all-time high scores leaderboard
+ * Display player's personal best stats
  */
-function displayHighScores() {
+function displayPersonalBest(playerId) {
     clearScreen();
-    const scores = loadHighScores();
+    const personalBest = getPersonalBest(playerId);
 
     console.log(`${C.cyan}${'='.repeat(70)}${C.reset}`);
-    console.log(`${C.bright}${C.yellow}      ALL-TIME LEADERBOARD - TOP 10 FASTEST TIMES${C.reset}`);
+    console.log(`${C.bright}${C.yellow}      YOUR PERSONAL BEST${C.reset}`);
     console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
 
-    if (scores.length === 0) {
-        console.log(`${C.yellow}No high scores yet. Be the first to complete the paradox!${C.reset}\n`);
+    if (!personalBest) {
+        console.log(`${C.yellow}No previous record. This is your first run! Go for a great score!${C.reset}\n`);
     } else {
-        console.log(`${C.bright}Rank | Score    | Player      | Time     | Energy | Date${C.reset}`);
-        console.log(`${C.cyan}${'-'.repeat(70)}${C.reset}`);
-        
-        scores.forEach((score, index) => {
-            const medal = index === 0 ? '🏆' : index === 1 ? '🥈' : index === 2 ? '🥉' : '  ';
-            const timeStr = formatTime(score.timeUsed);
-            const energyStr = `${score.energyRemaining}%`;
-            const rankStr = `${medal} ${score.rank}`.padEnd(6);
-            const scoreStr = score.score.toString().padEnd(9);
-            const nameStr = score.playerName.padEnd(12);
-            const timeDisplay = timeStr.padEnd(9);
-            const energyDisplay = energyStr.padEnd(7);
-            
-            console.log(`${rankStr}| ${scoreStr}| ${nameStr}| ${timeDisplay}| ${energyDisplay}| ${score.date}`);
-        });
+        console.log(`${C.bright}PREVIOUS BEST:${C.reset}`);
+        console.log(`${C.cyan}───────────────────────────────────────────────${C.reset}`);
+        console.log(`Score:           ${C.bright}${C.green}${personalBest.score}${C.reset} points`);
+        console.log(`Time:            ${C.yellow}${formatTime(personalBest.timeUsed)}${C.reset} seconds`);
+        console.log(`Time Score:      ${personalBest.timeScore} points`);
+        console.log(`Energy Remaining: ${personalBest.energyRemaining}%`);
+        console.log(`Energy Bonus:    ${personalBest.energyBonus} points`);
+        console.log(`Date Achieved:   ${C.cyan}${personalBest.date}${C.reset}`);
+        console.log(`${C.cyan}───────────────────────────────────────────────${C.reset}`);
+        console.log(`${C.bright}${C.yellow}Can you beat this? 💪${C.reset}\n`);
     }
 
-    console.log(`\n${C.cyan}${'='.repeat(70)}${C.reset}`);
-    console.log(`${C.yellow}Score Formula: (${MAX_TIME_SECONDS}s - Time Used) × 100 + (Energy Remaining × 10)${C.reset}`);
     console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
 }
 
@@ -383,11 +383,27 @@ async function processMove(input) {
 }
 
 async function runGame() {
+    // Skip name entry - use default player ID
+    clearScreen();
+    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
+    console.log(`${C.bright}${C.yellow}        THE TORQUE PARADOX${C.reset}`);
+    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}\n`);
+    
+    state.playerId = DEFAULT_PLAYER_ID;
+    
+    // Show personal best
+    displayPersonalBest(state.playerId);
+    await ask("Press ENTER to continue...");
+    
+    // Show intro and rules
     await showIntroAndRules();
     
     clearScreen();
     console.log(C.yellow + "Initializing The Torque Paradox..." + C.reset);
     await sleep(1500);
+
+    // START THE TIMER
+    state.startTime = Date.now();
 
     // Setup the prompt so readline knows what to redraw
     rl.setPrompt(`${C.bright}Action > ${C.reset}`);
@@ -466,23 +482,16 @@ async function runGame() {
         console.log(`${C.bright}TOTAL SCORE:     ${C.green}${totalScore}${C.reset} points${C.reset}`);
         console.log(`${C.cyan}───────────────────────────────────────────────${C.reset}\n`);
         
-        // Check if it's a new high score
-        if (isHighScore(totalScore)) {
-            console.log(`${C.bright}${C.yellow}🌟 NEW HIGH SCORE ACHIEVED! 🌟${C.reset}\n`);
-            
-            // Ask for player name
-            const playerName = await ask("Enter your name for the leaderboard: ");
-            const cleanName = playerName.trim() || "Anonymous";
-            
-            const newScore = saveHighScore(timeUsed, energyRemaining, cleanName);
-            console.log(`\n${C.green}✓ Score saved to leaderboard at rank #${newScore.rank}!${C.reset}\n`);
-        } else {
-            // Still a good score, save it
-            saveHighScore(timeUsed, energyRemaining, "Player");
-            const scores = loadHighScores();
-            const rank = getScoreRank(totalScore);
-            if (rank) {
-                console.log(`${C.yellow}Good score! You ranked #${rank} on the all-time leaderboard.${C.reset}\n`);
+        // Save score and check if it's new personal best
+        const result = savePersonalBest(state.playerId, timeUsed, energyRemaining);
+        
+        if (result.isNewPB) {
+            console.log(`${C.bright}${C.yellow}🌟 NEW PERSONAL BEST! 🌟${C.reset}`);
+            if (result.previousBest) {
+                const improvementPercent = ((result.improvement / result.previousBest.score) * 100).toFixed(1);
+                console.log(`${C.green}You improved by ${result.improvement} points (${improvementPercent}% better)!${C.reset}\n`);
+            } else {
+                console.log(`${C.green}This is your first completion. Awesome start!${C.reset}\n`);
             }
         }
     } else {
@@ -490,10 +499,16 @@ async function runGame() {
         console.log(`${C.bgRed}${C.white}  GAME OVER - MISSION FAILED  ${C.reset}\n`);
         console.log(`${C.red}Reason: ${state.message}${C.reset}`);
         console.log(`You reached Level ${state.level} in ${formatTime(timeUsed)}`);
+        
+        // Show personal best for comparison
+        const personalBest = getPersonalBest(state.playerId);
+        if (personalBest) {
+            console.log(`\n${C.yellow}Your personal best: ${personalBest.score} points (${formatTime(personalBest.timeUsed)})${C.reset}`);
+        }
     }
 
-    // Display all-time high scores
-    displayHighScores();
+    // Display personal best again
+    displayPersonalBest(state.playerId);
     
     console.log("Press any key to exit...");
     await new Promise(resolve => rl.once('line', resolve));
