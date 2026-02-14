@@ -390,8 +390,8 @@ async function showIntroAndRules() {
     await sleep(200);
     
     const storyLines = [
-        `${C.white}You regain consciousness in a cold, sterile room. Your last memory is...`,
-        `${C.white}fractured. Before you sit 10 sealed bottles on a metal table, humming`,
+        `${C.white}You regain consciousness in a cold, sterile room. Your last memory is...${C.reset}`,
+        `${C.white}fractured. Before you sit 10 sealed bottles on a metal table, humming${C.reset}`,
         `${C.white}with an ominous energy. A voice echoes through speakers:${C.reset}`,
         ``,
         `${C.bright}${C.yellow}"Open them all, or stay here forever."${C.reset}`,
@@ -401,8 +401,13 @@ async function showIntroAndRules() {
     ];
     
     for (const line of storyLines) {
-        console.log(line);
-        await sleep(300);
+        if (line === "") {
+            console.log(line);
+        } else {
+            await printSlowly(line, 30);
+            console.log("");
+        }
+        await sleep(200);
     }
     await sleep(400);
     
@@ -505,14 +510,6 @@ async function showIntroAndRules() {
         console.log(`  ✓ ${tip}`);
         await sleep(250);
     }
-    
-    // --- FINAL PROMPT ---
-    console.log("");
-    console.log(`${C.cyan}${'═'.repeat(70)}${C.reset}`);
-    await sleep(400);
-    console.log(`${C.bright}${C.bgGreen}${C.black}     🎮 READY TO BEAT YOUR PERSONAL BEST? 🎮     ${C.reset}`);
-    console.log(`${C.cyan}${'═'.repeat(70)}${C.reset}`);
-    console.log("");
     
     await ask(`${C.bright}${C.yellow}Press ENTER to BEGIN...${C.reset}`);
 }
