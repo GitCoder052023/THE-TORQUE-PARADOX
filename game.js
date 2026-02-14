@@ -32,10 +32,12 @@ const state = {
     energy: 100, // Percentage
     startTime: 0, // Will be set when actual game starts, not in intro
     endTime: 0,
+    remainingTime: MAX_TIME_SECONDS, // Tracks remaining time (decremented per action)
     isGameOver: false,
     message: "Welcome to the paradox. Choose wisely.",
     history: [], // To show last few moves
-    playerId: DEFAULT_PLAYER_ID // Current player's ID 
+    playerId: DEFAULT_PLAYER_ID, // Current player's ID
+    lastRecoveryTick: 0 // For tracking energy recovery
 };
 
 // Bottle Physics (Hidden from player mostly)
@@ -184,20 +186,125 @@ function formatTime(seconds) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Smart input parser - detects direction, time, and force
+ * from messy, case-insensitive, unordered input
+ * 
+ * Returns: { direction: 'CW'|'ACW', time: number, force: number, valid: boolean }
+ */
+function parseSmartInput(input) {
+    const result = {
+        direction: null,
+        time: null,
+        force: null,
+        valid: false,
+        error: ""
+    };
+
+    // Convert to uppercase for direction matching, keep original for number extraction
+    const upperInput = input.toUpperCase();
+
+    // --- DETECT DIRECTION (CW or ACW, case-insensitive) ---
+    if (upperInput.includes('ACW')) {
+        result.direction = 'ACW';
+    } else if (upperInput.includes('CW')) {
+        result.direction = 'CW';
+    } else {
+        result.error = "Direction not found. Use CW or ACW.";
+        return result;
+    }
+
+    // --- DETECT TIME (number followed by 'S', case-insensitive) ---
+    // Regex: capture number before 's' or 'S'
+    const timeMatch = input.match(/(\d+)\s*[sS]/);
+    if (timeMatch) {
+        result.time = parseInt(timeMatch[1], 10);
+    } else {
+        result.error = "Time not found. Use format: 20S";
+        return result;
+    }
+
+    // --- DETECT FORCE (number followed by 'N', case-insensitive) ---
+    // Regex: capture number before 'n' or 'N'
+    const forceMatch = input.match(/(\d+)\s*[nN]/);
+    if (forceMatch) {
+        result.force = parseInt(forceMatch[1], 10);
+    } else {
+        result.error = "Force not found. Use format: 10N";
+        return result;
+    }
+
+    // --- VALIDATION ---
+    if (result.time <= 0) {
+        result.error = "Time must be greater than 0.";
+        return result;
+    }
+    if (result.force <= 0) {
+        result.error = "Force must be greater than 0.";
+        return result;
+    }
+    if (result.time > state.remainingTime) {
+        result.error = `Not enough time remaining. You have ${state.remainingTime}s left.`;
+        return result;
+    }
+
+    result.valid = true;
+    return result;
+}
+
+/**
+ * Calculate energy loss with inverse proportional physics
+ * Energy loss is inversely proportional to both time and force
+ * Formula: Base energy loss / (time * force scaling factor)
+ * 
+ * Longer times = less punishment per second
+ * Higher forces = more punishment overall
+ */
+function calculateEnergyLoss(time, force) {
+    // Base calculation: force has primary impact
+    // Inverse time scaling: more time = less penalty
+    const timeScalingFactor = Math.max(0.5, time / 10); // Diminishing returns on time
+    const baseEnergyLoss = Math.ceil(force / 2); // Original formula as base
+    const scaledEnergyLoss = Math.ceil(baseEnergyLoss / timeScalingFactor);
+    
+    // Additional penalty for high forces with short times (dangerous moves)
+    const dangerPenalty = force > 50 && time < 5 ? Math.ceil(force / 10) : 0;
+    
+    return scaledEnergyLoss + dangerPenalty;
+}
+
+/**
+ * Update energy recovery - 1% per second
+ * Called during UI ticker updates
+ */
+function updateEnergyRecovery(currentTime) {
+    if (state.lastRecoveryTick === 0) {
+        state.lastRecoveryTick = currentTime;
+        return;
+    }
+
+    const secondsElapsed = currentTime - state.lastRecoveryTick;
+    if (secondsElapsed >= 1) {
+        const recoveryAmount = 1; // 1% per second
+        state.energy = Math.min(100, state.energy + recoveryAmount);
+        state.lastRecoveryTick = currentTime;
+    }
+}
+
 function renderInterface() {
     clearScreen();
     const timeUsed = getTimeElapsed();
-    const timeLeft = MAX_TIME_SECONDS - timeUsed;
     
     // Header
     console.log(`${C.cyan}=================================================${C.reset}`);
     console.log(`${C.bright}           THE TORQUE PARADOX - LEVEL ${state.level}/${TOTAL_LEVELS}${C.reset}`);
     console.log(`${C.cyan}=================================================${C.reset}`);
     
-    // Stats without player name
-    const timeColor = timeLeft < 60 ? C.red : (timeLeft < 120 ? C.yellow : C.green);
-    console.log(`Time: ${timeColor}${formatTime(timeUsed)}${C.reset} / ${formatTime(MAX_TIME_SECONDS)}`);
-    console.log(`Energy:    ${getProgressBar(state.energy, 100, 20, state.energy < 30 ? C.red : C.green)}`);
+    // Stats with new time system
+    const timeColor = state.remainingTime < 60 ? C.red : (state.remainingTime < 120 ? C.yellow : C.green);
+    console.log(`Time Used:     ${C.bright}${formatTime(timeUsed)}${C.reset}`);
+    console.log(`Time Remaining: ${timeColor}${formatTime(state.remainingTime)}${C.reset}`);
+    console.log(`Energy:        ${getProgressBar(state.energy, 100, 20, state.energy < 30 ? C.red : C.green)}`);
     console.log("");
     
     console.log(`       ${C.yellow}_____${C.reset}`);
@@ -212,7 +319,7 @@ function renderInterface() {
     state.history.slice(-3).forEach(log => console.log(` > ${log}`));
     console.log(` > ${C.yellow}${state.message}${C.reset}`);
     console.log(`${C.cyan}-------------------------------------------------${C.reset}`);
-    console.log("Commands: 'cw <force>', 'acw <force>' (e.g., 'cw 25')");
+    console.log("Commands: e.g., 'cw 20s 10n' or '10n acw 20s' (any order, case-insensitive)");
 }
 
 // --- INTRO & RULES ---
@@ -248,12 +355,20 @@ async function showIntroAndRules() {
     console.log(`• If you twist the WRONG way, you TIGHTEN the cap (bad!)`);
     console.log(`• Applying force in the RIGHT direction clears the jam and opens it\n`);
 
-    console.log(`${C.bright}ENERGY & FORCE:${C.reset}`);
-    console.log(`• You start each level with 100% energy`);
-    console.log(`• Every action costs energy: Force ÷ 2 = Energy lost`);
-    console.log(`  Example: Applying 50N costs 25 energy`);
-    console.log(`• If energy hits 0%, you collapse before opening the bottle → GAME OVER`);
-    console.log(`• Completing a level restores +20 energy (max 100%)\n`);
+    console.log(`${C.bright}NEW: TIME & FORCE MECHANICS:${C.reset}`);
+    console.log(`• You now specify DURATION of force application (in seconds)`);
+    console.log(`• Example input: 'cw 20s 10n' = Clockwise, 20 seconds, 10 newtons`);
+    console.log(`• Input order doesn't matter! All of these work:`);
+    console.log(`  - 'cw 20s 10n', '10n cw 20s', '20s 10n cw'`);
+    console.log(`• Case-insensitive: 'CW', 'cw', 'Cw' all work the same\n`);
+
+    console.log(`${C.bright}ENERGY SYSTEM (UPDATED):${C.reset}`);
+    console.log(`• Energy loss is now inversely proportional to time & force`);
+    console.log(`• Longer application times = less energy penalty`);
+    console.log(`• This encourages strategic, sustained application`);
+    console.log(`• You recover 1% energy per second automatically`);
+    console.log(`• Max energy: 100% (cannot exceed)`);
+    console.log(`• Completing a level restores +20 energy (then capped at 100%)\n`);
 
     console.log(`${C.bright}THE CATCH (BREAKAGE):${C.reset}`);
     console.log(`• Each bottle has a breaking point (max capacity)`);
@@ -267,16 +382,12 @@ async function showIntroAndRules() {
     console.log(`• Level 8-10: BRUTAL. Breakage capacity nearly equals force needed`);
     console.log(`• You MUST be precise or the bottle shatters\n`);
 
-    console.log(`${C.bright}COMMANDS:${C.reset}`);
-    console.log(`• 'cw <force>'   - Twist clockwise with N newtons of force`);
-    console.log(`• 'acw <force>'  - Twist counter-clockwise with N newtons of force`);
-    console.log(`  Example: 'cw 25' or 'acw 30'\n`);
-
     console.log(`${C.bright}STRATEGY TIPS:${C.reset}`);
     console.log(`• Watch the LOG messages—they tell you what's happening`);
     console.log(`• If a bottle gets jammed, you'll need extra force to clear it`);
-    console.log(`• Start with moderate force; increase gradually if resistance rises`);
-    console.log(`• Time is precious—be efficient with your moves`);
+    console.log(`• Use LONGER durations with moderate force for efficiency`);
+    console.log(`• Time spent on action = time deducted from remaining time pool`);
+    console.log(`• Energy recovers passively, so be patient when needed`);
     console.log(`• Sometimes a single powerful move beats multiple weak ones\n`);
 
     console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
@@ -297,9 +408,7 @@ function displayPersonalBest(playerId) {
     console.log(`${C.bright}${C.yellow}      YOUR PERSONAL BEST${C.reset}`);
     console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
 
-    if (!personalBest) {
-        console.log(`${C.yellow}No previous record. This is your first run! Go for a great score!${C.reset}\n`);
-    } else {
+    if (!personalBest) {} else {
         console.log(`${C.bright}PREVIOUS BEST:${C.reset}`);
         console.log(`${C.cyan}───────────────────────────────────────────────${C.reset}`);
         console.log(`Score:           ${C.bright}${C.green}${personalBest.score}${C.reset} points`);
@@ -318,39 +427,53 @@ function displayPersonalBest(playerId) {
 // --- CORE GAME LOGIC ---
 
 async function processMove(input) {
-    const parts = input.trim().toLowerCase().split(' ');
-    const dir = parts[0];
-    const force = parseInt(parts[1]);
+    // Use smart parser instead of simple split
+    const parsed = parseSmartInput(input);
 
-    // Validation
-    if ((dir !== 'cw' && dir !== 'acw') || isNaN(force) || force <= 0) {
-        state.message = "Invalid command. Use 'cw 10' or 'acw 20'.";
+    if (!parsed.valid) {
+        state.message = `${C.red}${parsed.error}${C.reset}`;
         return;
     }
 
-    // 1. Check Energy Cost (Force ÷ 2 = Energy Loss)
-    const energyCost = Math.ceil(force / 2); // 50 force = 25 energy lost
+    const direction = parsed.direction;
+    const timeApplied = parsed.time;
+    const force = parsed.force;
+
+    // 1. Check if we have enough remaining time
+    if (timeApplied > state.remainingTime) {
+        state.message = `${C.red}Not enough time remaining (${state.remainingTime}s left).${C.reset}`;
+        return;
+    }
+
+    // 2. Calculate energy cost using inverse proportional formula
+    const energyCost = calculateEnergyLoss(timeApplied, force);
+    
     if (state.energy < energyCost) {
         state.isGameOver = true;
         state.message = `${C.bgRed} EXHAUSTED! You passed out before opening the bottle. ${C.reset}`;
         return;
     }
+    
+    // Deduct energy
     state.energy -= energyCost;
+    
+    // 3. Deduct time from remaining pool
+    state.remainingTime -= timeApplied;
 
-    // 2. Check Breakage (Too much force)
+    // 4. Check Breakage (Too much force)
     if (force > bottle.maxCapacity) {
         state.isGameOver = true;
-        state.message = `${C.bgRed} CRACK! You applied ${force}N force. The bottle shattered! ${C.reset}`;
+        state.message = `${C.bgRed} CRACK! You applied ${force}N force over ${timeApplied}s. The bottle shattered! ${C.reset}`;
         return;
     }
 
-    // 3. Physics Logic
-    const attemptDir = dir.toUpperCase();
+    // 5. Physics Logic
+    const attemptDir = direction.toUpperCase();
     
     // LOGIC: If we rotate in the LOCKED direction (Bad)
     if (attemptDir === bottle.lockedDir) {
         bottle.currentTightness += force;
-        state.history.push(`${C.red}Applied ${force}N wrong direction. Bottle tightened!${C.reset}`);
+        state.history.push(`${C.red}Applied ${force}N ${attemptDir} for ${timeApplied}s (wrong direction). Bottle tightened!${C.reset}`);
     } 
     // LOGIC: If we rotate in the OPEN direction (Good)
     else {
@@ -363,22 +486,28 @@ async function processMove(input) {
                 
                 if (remainingForce >= bottle.requiredForce) {
                     bottle.isOpen = true;
-                    state.message = "SUCCESS! The jamming cleared and the cap flew off!";
+                    state.message = `${C.green}SUCCESS! Applied ${force}N for ${timeApplied}s. The jamming cleared and the cap flew off!${C.reset}`;
+                } else {
+                    state.history.push(`${C.yellow}Applied ${force}N ${attemptDir} for ${timeApplied}s. Jam cleared but more force needed.${C.reset}`);
                 }
             } else {
                 // Force reduced the jam, but didn't clear it
                 bottle.currentTightness -= force;
-                state.history.push(`${C.yellow}Applied ${force}N. Jam reduced but not cleared.${C.reset}`);
+                state.history.push(`${C.yellow}Applied ${force}N ${attemptDir} for ${timeApplied}s. Jam reduced but not cleared.${C.reset}`);
                 return;
             }
         } else {
             // No jam, pure opening attempt
             if (force >= bottle.requiredForce) {
                 bottle.isOpen = true;
-                state.message = "POP! The bottle opens smoothly.";
+                state.message = `${C.green}POP! Applied ${force}N for ${timeApplied}s. The bottle opens smoothly.${C.reset}`;
+            } else {
+                state.history.push(`${C.yellow}Applied ${force}N ${attemptDir} for ${timeApplied}s. Progress made!${C.reset}`);
             }
         }
-        state.history.push(`${C.green}Applied ${force}N ${attemptDir}. Progress made!${C.reset}`);
+        if (!bottle.isOpen) {
+            state.history.push(`${C.green}Applied ${force}N ${attemptDir} for ${timeApplied}s. Progress made!${C.reset}`);
+        }
     }
 }
 
@@ -404,6 +533,8 @@ async function runGame() {
 
     // START THE TIMER
     state.startTime = Date.now();
+    state.remainingTime = MAX_TIME_SECONDS;
+    state.lastRecoveryTick = getTimeElapsed();
 
     // Setup the prompt so readline knows what to redraw
     rl.setPrompt(`${C.bright}Action > ${C.reset}`);
@@ -411,6 +542,8 @@ async function runGame() {
     // START THE BACKGROUND UI TICKER
     const UI_TICKER = setInterval(() => {
         if (!state.isGameOver && bottle.requiredForce !== 0) {
+            const currentTime = getTimeElapsed();
+            updateEnergyRecovery(currentTime);
             renderInterface();
             // Redraw the prompt and whatever the user is currently typing
             rl.prompt(true); 
@@ -428,8 +561,8 @@ async function runGame() {
         // Force an immediate render before asking for input
         renderInterface(); 
         
-        // Time Check
-        if (getTimeElapsed() >= MAX_TIME_SECONDS) {
+        // Time Check (using remaining time now)
+        if (state.remainingTime <= 0) {
             state.isGameOver = true;
             state.message = `${C.bgRed} TIME'S UP! The bomb... err, bottle remained closed. ${C.reset}`;
             break;
