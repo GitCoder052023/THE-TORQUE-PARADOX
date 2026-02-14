@@ -20,6 +20,7 @@ const C = {
     green: "\x1b[32m",
     yellow: "\x1b[33m",
     blue: "\x1b[34m",
+    magenta: "\x1b[35m",
     cyan: "\x1b[36m",
     white: "\x1b[37m",
     bgRed: "\x1b[41m",
@@ -65,6 +66,21 @@ function sleep(ms) {
 
 function clearScreen() {
     process.stdout.write('\x1b[H\x1b[J');
+}
+
+async function printSlowly(text, delay = 30) {
+    return new Promise((resolve) => {
+        let i = 0;
+        const interval = setInterval(() => {
+            if (i < text.length) {
+                process.stdout.write(text[i]);
+                i++;
+            } else {
+                clearInterval(interval);
+                resolve();
+            }
+        }, delay);
+    });
 }
 
 /**
@@ -326,87 +342,187 @@ function renderInterface() {
 
 async function showIntroAndRules() {
     clearScreen();
-    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
-    console.log(`${C.bright}${C.yellow}        WELCOME TO THE TORQUE PARADOX${C.reset}`);
-    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}\n`);
-
-    console.log(`${C.bright}THE STORY:${C.reset}`);
-    console.log(`You are trapped in a mysterious facility. Before you sit 10 sealed`);
-    console.log(`bottles, each one a puzzle. Your only way out is to open them all`);
-    console.log(`before your energy runs out and time expires. But beware—each bottle`);
-    console.log(`has its own twisted physics, and one wrong move could shatter`);
-    console.log(`everything.\n`);
-
-    console.log(`${C.bright}THE OBJECTIVE:${C.reset}`);
-    console.log(`Open all ${TOTAL_LEVELS} bottles within ${MAX_TIME_SECONDS} seconds using strategic force.`);
-    console.log(`${C.bright}BEAT YOUR PERSONAL BEST!${C.reset}\n`);
-
-    console.log(`${C.bright}SCORING SYSTEM:${C.reset}`);
-    console.log(`• Your score is based on how FAST you complete the game`);
-    console.log(`• Formula: (${MAX_TIME_SECONDS}s - Your Time) × 100 + Energy Bonus`);
-    console.log(`• Energy Bonus: Remaining Energy × 10`);
-    console.log(`• Example: Complete in 120s with 50 energy = (300-120)×100 + 50×10 = 18,500`);
-    console.log(`• Fastest times get the highest scores!`);
-    console.log(`• Your personal best score will be saved and tracked.\n`);
-
-    console.log(`${C.bright}HOW BOTTLES WORK:${C.reset}`);
-    console.log(`• Each bottle has a CAP that's locked in one direction: CW or ACW`);
-    console.log(`• Your goal: twist it in the OPPOSITE direction to open it`);
-    console.log(`• If you twist the WRONG way, you TIGHTEN the cap (bad!)`);
-    console.log(`• Applying force in the RIGHT direction clears the jam and opens it\n`);
-
-    console.log(`${C.bright}NEW: TIME & FORCE MECHANICS:${C.reset}`);
-    console.log(`• You now specify DURATION of force application (in seconds)`);
-    console.log(`• Example input: 'cw 20s 10n' = Clockwise, 20 seconds, 10 newtons`);
-    console.log(`• Input order doesn't matter! All of these work:`);
-    console.log(`  - 'cw 20s 10n', '10n cw 20s', '20s 10n cw'`);
-    console.log(`• Case-insensitive: 'CW', 'cw', 'Cw' all work the same\n`);
-
-    console.log(`${C.bright}ENERGY SYSTEM (UPDATED):${C.reset}`);
-    console.log(`• Energy loss is now inversely proportional to time & force`);
-    console.log(`• Longer application times = less energy penalty`);
-    console.log(`• This encourages strategic, sustained application`);
-    console.log(`• You recover 1% energy per second automatically`);
-    console.log(`• Max energy: 100% (cannot exceed)`);
-    console.log(`• Completing a level restores +20 energy (then capped at 100%)\n`);
-
-    console.log(`${C.bright}THE CATCH (BREAKAGE):${C.reset}`);
-    console.log(`• Each bottle has a breaking point (max capacity)`);
-    console.log(`• Apply TOO MUCH force and it shatters → GAME OVER`);
-    console.log(`• Early levels are forgiving, but later levels are TIGHT`);
-    console.log(`• You must balance power with precision\n`);
-
-    console.log(`${C.bright}DIFFICULTY PROGRESSION:${C.reset}`);
-    console.log(`• Level 1-3: Easier. More safety margin before breakage`);
-    console.log(`• Level 4-7: Moderate. The danger increases`);
-    console.log(`• Level 8-10: BRUTAL. Breakage capacity nearly equals force needed`);
-    console.log(`• You MUST be precise or the bottle shatters\n`);
-
-    console.log(`${C.bright}STRATEGY TIPS:${C.reset}`);
-    console.log(`• Watch the LOG messages—they tell you what's happening`);
-    console.log(`• If a bottle gets jammed, you'll need extra force to clear it`);
-    console.log(`• Use LONGER durations with moderate force for efficiency`);
-    console.log(`• Time spent on action = time deducted from remaining time pool`);
-    console.log(`• Energy recovers passively, so be patient when needed`);
-    console.log(`• Sometimes a single powerful move beats multiple weak ones\n`);
-
-    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}`);
-    console.log(`${C.bright}${C.green}Ready to beat your personal best? Press ENTER to begin...${C.reset}`);
-    console.log(`${C.cyan}${'='.repeat(60)}${C.reset}\n`);
-
-    await ask("");
+    
+    // --- DRAMATIC TITLE ANIMATION ---
+    console.log("");
+    
+    console.log(`${C.bright}${C.yellow}`);
+    await printSlowly("    ████████╗ ██████╗ ██████╗  ██████╗ ██╗   ██╗███████╗", 20);
+    console.log(`${C.reset}`);
+    await sleep(100);
+    
+    console.log(`${C.bright}${C.yellow}`);
+    await printSlowly("    ╚══██╔══╝██╔═══██╗██╔═══██╗██╔═══██╗██║   ██║██╔════╝", 20);
+    console.log(`${C.reset}`);
+    await sleep(100);
+    
+    console.log(`${C.bright}${C.yellow}`);
+    await printSlowly("       ██║   ██║   ██║██████╔╝██║   ██║██║   ██║█████╗  ", 20);
+    console.log(`${C.reset}`);
+    await sleep(100);
+    
+    console.log(`${C.bright}${C.yellow}`);
+    await printSlowly("       ██║   ██║   ██║██╔══██╗██║▄▄ ██║██║   ██║██╔══╝  ", 20);
+    console.log(`${C.reset}`);
+    await sleep(100);
+    
+    console.log(`${C.bright}${C.yellow}`);
+    await printSlowly("       ██║   ╚██████╔╝██║  ██║╚██████╔╝╚██████╔╝███████╗", 20);
+    console.log(`${C.reset}`);
+    await sleep(100);
+    
+    console.log(`${C.bright}${C.yellow}`);
+    await printSlowly("       ╚═╝    ╚═════╝ ╚═╝  ╚═╝ ╚══▀▀═╝  ╚═════╝ ╚══════╝", 20);
+    console.log(`${C.reset}`);
+    await sleep(300);
+    
+    console.log(`${C.bright}${C.red}`);
+    await printSlowly("                     🔓 P A R A D O X 🔓", 25);
+    console.log(`${C.reset}`);
+    await sleep(400);
+    
+    console.log("");
+    
+    // --- STORY SECTION ---
+    await sleep(500);
+    console.log(`${C.bright}${C.magenta}▶ STORY${C.reset}`);
+    console.log(`${C.cyan}${'─'.repeat(70)}${C.reset}`);
+    await sleep(200);
+    
+    const storyLines = [
+        `${C.white}You regain consciousness in a cold, sterile room. Your last memory is...`,
+        `${C.white}fractured. Before you sit 10 sealed bottles on a metal table, humming`,
+        `${C.white}with an ominous energy. A voice echoes through speakers:${C.reset}`,
+        ``,
+        `${C.bright}${C.yellow}"Open them all, or stay here forever."${C.reset}`,
+        ``,
+        `${C.white}Time is running out. Energy is running low. One wrong move...${C.reset}`,
+        `${C.white}and everything shatters.${C.reset}`
+    ];
+    
+    for (const line of storyLines) {
+        console.log(line);
+        await sleep(300);
+    }
+    await sleep(400);
+    
+    // --- OBJECTIVE SECTION ---
+    console.log("");
+    console.log(`${C.bright}${C.cyan}▶ OBJECTIVE${C.reset}`);
+    console.log(`${C.cyan}${'─'.repeat(70)}${C.reset}`);
+    await sleep(200);
+    
+    const objText = `Open all ${TOTAL_LEVELS} bottles within ${MAX_TIME_SECONDS} seconds.`;
+    await printSlowly(`${C.bright}${C.green}${objText}${C.reset}`, 15);
+    console.log("");
+    await sleep(300);
+    console.log(`${C.yellow}⭐ BEAT YOUR PERSONAL BEST ⭐${C.reset}`);
+    await sleep(400);
+    
+    // --- SCORING SECTION ---
+    console.log("");
+    console.log(`${C.bright}${C.green}▶ SCORING SYSTEM${C.reset}`);
+    console.log(`${C.cyan}${'─'.repeat(70)}${C.reset}`);
+    console.log(`${C.white}Speed is everything. Your score rewards fast completions:${C.reset}`);
+    console.log("");
+    console.log(`  ${C.bright}${C.yellow}Formula:${C.reset} (${MAX_TIME_SECONDS}s - Time Used) × 100 + Energy Bonus`);
+    console.log(`  ${C.bright}${C.yellow}Example:${C.reset} 120s used, 50 energy left = (300-120)×100 + 500 = ${C.green}18,500 points${C.reset}`);
+    await sleep(500);
+    
+    // --- MECHANICS SECTION ---
+    console.log("");
+    console.log(`${C.bright}${C.blue}▶ GAME MECHANICS${C.reset}`);
+    console.log(`${C.cyan}${'─'.repeat(70)}${C.reset}`);
+    
+    const mechanics = [
+        [
+            `${C.bright}${C.yellow}🔧 BOTTLES${C.reset}`,
+            `  Each cap is locked CW or ACW. Twist the OPPOSITE direction to open.`,
+            `  Wrong direction? The cap tightens. Right direction? Progress!`
+        ],
+        [
+            `${C.bright}${C.yellow}⚡ COMMANDS${C.reset}`,
+            `  Format: ${C.green}'cw 20s 10n'${C.reset} (Clockwise, 20 seconds, 10 newtons)`,
+            `  Order doesn't matter: ${C.green}'10n acw 20s'${C.reset} works the same`,
+            `  Case-insensitive: ${C.green}'CW'${C.reset}, ${C.green}'cw'${C.reset}, ${C.green}'Cw'${C.reset} all work`
+        ],
+        [
+            `${C.bright}${C.yellow}💪 FORCE & TIME${C.reset}`,
+            `  Apply force over DURATION (seconds). Long durations = less energy cost.`,
+            `  This rewards patience and strategy over pure brute force.`
+        ],
+        [
+            `${C.bright}${C.yellow}🩸 ENERGY${C.reset}`,
+            `  Start at 100%. Recover +1% per second passively.`,
+            `  Too much energy cost = You collapse (Game Over).`,
+            `  Each level clears, you gain +20 energy (capped at 100%).`
+        ],
+        [
+            `${C.bright}${C.yellow}💥 BREAKAGE${C.reset}`,
+            `  Apply TOO MUCH force and the bottle SHATTERS → Game Over.`,
+            `  Early levels forgiving. Late levels DANGEROUS. Balance power & precision.`
+        ]
+    ];
+    
+    for (const section of mechanics) {
+        console.log("");
+        console.log(section[0]);
+        for (let i = 1; i < section.length; i++) {
+            console.log(`  ${section[i]}`);
+        }
+        await sleep(400);
+    }
+    
+    // --- DIFFICULTY PROGRESSION ---
+    console.log("");
+    console.log(`${C.bright}${C.red}▶ DIFFICULTY PROGRESSION${C.reset}`);
+    console.log(`${C.cyan}${'─'.repeat(70)}${C.reset}`);
+    
+    const difficulties = [
+        [`${C.green}Levels 1-3${C.reset}`, `Easy. Safety margins are generous.`],
+        [`${C.yellow}Levels 4-7${C.reset}`, `Moderate. Danger increasing...`],
+        [`${C.red}Levels 8-10${C.reset}`, `${C.bright}BRUTAL.${C.reset} Capacity nearly equals force needed. Precision required.`]
+    ];
+    
+    for (const [level, desc] of difficulties) {
+        console.log(`  ${level}: ${desc}`);
+        await sleep(300);
+    }
+    
+    // --- STRATEGY TIPS ---
+    console.log("");
+    console.log(`${C.bright}${C.magenta}▶ STRATEGY TIPS${C.reset}`);
+    console.log(`${C.cyan}${'─'.repeat(70)}${C.reset}`);
+    const tips = [
+        "Watch the LOG—it tells you what's happening.",
+        "Jammed bottles need extra force to clear.",
+        "Long durations with moderate force = efficiency.",
+        "Energy recovers passively—be patient when needed.",
+        "One powerful move often beats multiple weak ones."
+    ];
+    
+    for (const tip of tips) {
+        console.log(`  ✓ ${tip}`);
+        await sleep(250);
+    }
+    
+    // --- FINAL PROMPT ---
+    console.log("");
+    console.log(`${C.cyan}${'═'.repeat(70)}${C.reset}`);
+    await sleep(400);
+    console.log(`${C.bright}${C.bgGreen}${C.black}     🎮 READY TO BEAT YOUR PERSONAL BEST? 🎮     ${C.reset}`);
+    console.log(`${C.cyan}${'═'.repeat(70)}${C.reset}`);
+    console.log("");
+    
+    await ask(`${C.bright}${C.yellow}Press ENTER to BEGIN...${C.reset}`);
 }
 
 /**
  * Display player's personal best stats
  */
-function displayPersonalBest(playerId) {
+async function displayPersonalBest(playerId) {
     clearScreen();
     const personalBest = getPersonalBest(playerId);
-
-    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}`);
-    console.log(`${C.bright}${C.yellow}      YOUR PERSONAL BEST${C.reset}`);
-    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
 
     if (!personalBest) {} else {
         console.log(`${C.bright}PREVIOUS BEST:${C.reset}`);
@@ -419,9 +535,9 @@ function displayPersonalBest(playerId) {
         console.log(`Date Achieved:   ${C.cyan}${personalBest.date}${C.reset}`);
         console.log(`${C.cyan}───────────────────────────────────────────────${C.reset}`);
         console.log(`${C.bright}${C.yellow}Can you beat this? 💪${C.reset}\n`);
-    }
 
-    console.log(`${C.cyan}${'='.repeat(70)}${C.reset}\n`);
+        await ask("Press ENTER to continue...");
+    }
 }
 
 // --- CORE GAME LOGIC ---
@@ -522,7 +638,6 @@ async function runGame() {
     
     // Show personal best
     displayPersonalBest(state.playerId);
-    await ask("Press ENTER to continue...");
     
     // Show intro and rules
     await showIntroAndRules();
