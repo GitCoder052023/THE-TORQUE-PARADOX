@@ -1,18 +1,16 @@
-# 🧪 The Torque Paradox
+<div align="center">
+<h1>The Torque Paradox </h1>
+</div>
 
 <p align="center">
-<strong>A High-Stakes Physics Puzzle for the Command Line</strong>
-</p>
-
-<p align="center">
-<a href="[https://nodejs.org/](https://www.google.com/search?q=https://nodejs.org/)">
-<img src="[https://img.shields.io/badge/Runtime-Node.js-green?style=flat-square&logo=node.js](https://www.google.com/search?q=https://img.shields.io/badge/Runtime-Node.js-green%3Fstyle%3Dflat-square%26logo%3Dnode.js)" alt="Node.js">
+<a href="https://www.google.com/search?q=https://nodejs.org/">
+<img src="https://img.shields.io/badge/Runtime-Node.js-green?style=flat-square&logo=node.js" alt="Node.js">
 </a>
 <a href="#">
-<img src="[https://img.shields.io/badge/Dependencies-Zero-blue?style=flat-square](https://www.google.com/search?q=https://img.shields.io/badge/Dependencies-Zero-blue%3Fstyle%3Dflat-square)" alt="Zero Dependencies">
+<img src="https://img.shields.io/badge/Dependencies-Zero-blue?style=flat-square" alt="Zero Dependencies">
 </a>
 <a href="#">
-<img src="[https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square](https://www.google.com/search?q=https://img.shields.io/badge/License-MIT-lightgrey%3Fstyle%3Dflat-square)" alt="License">
+<img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square" alt="License">
 </a>
 </p>
 
@@ -22,19 +20,26 @@ You are trapped in a mysterious facility. Before you sit 10 sealed bottles, each
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
-* [About the Game](https://www.google.com/search?q=%23-about-the-game)
-* [Features](https://www.google.com/search?q=%23-features)
-* [Installation & Setup](https://www.google.com/search?q=%23-installation--setup)
-* [How to Play](https://www.google.com/search?q=%23-how-to-play)
-* [Controls](https://www.google.com/search?q=%23-controls)
-* [Mechanics & Scoring](https://www.google.com/search?q=%23-mechanics--scoring)
-* [Project Structure](https://www.google.com/search?q=%23-project-structure)
+- [Table of Contents](#table-of-contents)
+- [About the Game](#about-the-game)
+- [Features](#features)
+- [Installation \& Setup](#installation--setup)
+  - [Prerequisites](#prerequisites)
+  - [Steps](#steps)
+- [How to Play](#how-to-play)
+  - [The Objective](#the-objective)
+  - [The HUD](#the-hud)
+  - [The Rules](#the-rules)
+- [Controls](#controls)
+- [Mechanics \& Scoring](#mechanics--scoring)
+  - [Scoring Formula](#scoring-formula)
+  - [Physics Engine](#physics-engine)
 
 ---
 
-## 🕹 About the Game
+## About the Game
 
 **The Torque Paradox** is a pure Node.js CLI (Command Line Interface) game that simulates physics-based puzzles. Players must apply specific amounts of force to open bottles without shattering them.
 
@@ -42,7 +47,7 @@ The game features a hidden physics engine that tracks **torque direction**, **ma
 
 ---
 
-## ✨ Features
+## Features
 
 * **Zero Dependencies:** Built entirely with standard Node.js libraries (`fs`, `readline`, `path`).
 * **Persistent Scoring:** Local JSON save system tracks your personal bests, time splits, and energy efficiency.
@@ -52,13 +57,13 @@ The game features a hidden physics engine that tracks **torque direction**, **ma
 
 ---
 
-## 🚀 Installation & Setup
+## Installation & Setup
 
 Since this game uses **ES Modules** (`import` syntax), you need to configure your environment slightly.
 
 ### Prerequisites
 
-* Node.js (v14.0.0 or higher recommended)
+* Node.js (v22.22.0 or higher recommended)
 
 ### Steps
 
@@ -81,7 +86,7 @@ node game.js
 
 ---
 
-## 🎮 How to Play
+## How to Play
 
 ### The Objective
 
@@ -110,7 +115,7 @@ Energy: [██████████----------] 50%
 
 ---
 
-## ⌨ Controls
+## Controls
 
 The game uses a text parser. Type your command and press `ENTER`.
 
@@ -125,7 +130,7 @@ The game uses a text parser. Type your command and press `ENTER`.
 
 ---
 
-## 📊 Mechanics & Scoring
+## Mechanics & Scoring
 
 ### Scoring Formula
 
@@ -135,20 +140,7 @@ Your final score is calculated based on speed and efficiency.
 ### Physics Engine
 
 * **Level Scaling:** As you progress from Level 1 to 10, the "Safety Margin" decreases. In Level 1, the bottle is strong. In Level 10, the breaking point is terrifyingly close to the force required to open it.
-* **Energy Recovery:** Completing a level restores **+20% Energy**.
-
----
-
-## 📂 Project Structure
-
-```text
-torque-paradox/
-├── personalscores.json  # Auto-generated file storing high scores
-├── game.js              # Main game logic (Source code)
-├── package.json         # Configuration (for ES Module support)
-└── README.md            # Documentation
-
-```
+* **Energy Recovery:** Completing a level restores **+20% Energy**.       # Documentation
 
 ---
 
