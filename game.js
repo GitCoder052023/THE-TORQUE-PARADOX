@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const TOTAL_LEVELS = 10;
 const MAX_TIME_SECONDS = 300; // 5 Minutes total
 const SCORE_FILE = path.join(__dirname, 'personalscores.json');
-const DEFAULT_PLAYER_ID = 'player_default'; // Default player ID without requiring name input
+const DEFAULT_PLAYER_ID = 'player_default'; // Default player ID
 
 // ANSI Colors for Visuals (No external libraries needed)
 const C = {
